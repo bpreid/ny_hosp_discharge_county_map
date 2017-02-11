@@ -1,0 +1,211 @@
+<html>
+<head>
+	<title>New York Hospital Discharges 2014</title>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script> 
+	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+	<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+	<script src="ny_counties_geojson.js"></script>
+	<script src="NY_Hospitals.js"></script>
+	<style>
+    #counties path{
+/* 
+      fill: #ccc;
+ */
+/* 
+      stroke: #999;
+ */
+    }
+    #hospitals path{
+      fill: #900;
+      stroke: #999;
+    }
+    #hospitals path:hover{
+      fill: black;
+    }
+    
+	.background {
+	  fill: none;
+	  pointer-events: all;
+	}
+
+	.tooltip {
+		 pointer-events:none; /*let mouse events pass through*/
+		 opacity:0;
+		 transition: opacity 0.3s;
+		 text-shadow:1px 1px 0px gray;
+	}
+
+
+  </style>
+</head>
+<body>
+
+<div>
+<select name="condition_select" id="condition_select">
+	<option>Select a Condition</option>
+</select>
+</div>
+<br><br>
+
+<svg style='border:thin black solid;'>
+	<text id="county" 
+		x="20" y="400" ><tspan>Click on county for info</tspan></text>
+</svg>
+
+	<script>
+  
+  		var county_name;
+  		var condition_name = "LIVEBORN";
+  		var conditions = [];
+  
+		function isCounty(element){
+			var element_county = element["properties"]["name"];
+			var county_position = element_county.indexOf(" Count");
+			element_county = element_county.substring(0,county_position);
+			return (element_county == county_name);
+		}
+
+		d3.csv("diagnosis_x_county_male.csv", function(data) {
+	
+			// Read the data file and find the most common diagnoses state-wide
+			var grand_totals = [];
+			var gt_index = 0;
+			$.each(data[data.length-1], function (key,value){
+				grand_totals[gt_index++] = {key, value};			
+			});
+			grand_totals.sort(function(a,b){
+				return a.value-b.value;
+			});
+	
+			for( var d = 0; d<12 ; d++){
+				gt_index = grand_totals.length - 1 - d;
+				var key = grand_totals[gt_index].key
+				if (key != "County" && key != "Grand Total")	conditions.push(key);
+			}
+
+			var options = $('#condition_select').get(0).options;
+			for(var c= 0; c< conditions.length; c++) {
+			  options[options.length] = new Option(conditions[c], conditions[c]);
+			}
+	
+			for (var cnty = 0; cnty < data.length; cnty++){
+				county_name  = data[cnty]["County"];
+				var json_index = counties_json.features.findIndex(isCounty);
+				if (json_index > -1) {
+					// loop over diagnoses or procedures to combine medical data with geographical data
+					$.each(data[cnty], function( index, value ) {
+						counties_json.features[json_index]["properties"][index] = value;
+					});
+				}
+			}		
+		});	
+
+		var width = 660,
+			 height = 500;
+
+		var svg =  d3.select( "svg" )
+		  .attr( "width", width )
+		  .attr( "height", height );
+		  
+		var counties = svg.append( "g" ).attr( "id", "counties" );
+
+		var albersProjection = d3.geo.albers()
+		  .scale( 6000 )
+		  .rotate( [75.7,-0.5] )
+		  .center( [0, 42.313] )
+		  .translate( [width/2,height/2] );
+
+		var geoPath = d3.geo.path()
+			 .projection( albersProjection );
+
+		counties.selectAll( "path" )
+			.data( counties_json.features )
+			.enter()
+			.append( "path" )
+			.attr( "d", geoPath )
+			.attr( "fill"  , "#fff")
+			.attr( "stroke", "#999")
+			.on('click', function(d) {			
+			console.log(d);
+			console.log(this);
+				d3.select(this).attr("stroke","#f00");
+				county_name = d.properties.name;
+				var county_index = counties_json.features.findIndex(isCounty);
+				var county_value, percent_value;
+				if (d.properties[condition_name]) {
+					county_value = d.properties[condition_name];
+					percent_value = Math.floor(d.properties[condition_name]/d.properties["Grand Total"]*100);
+				}
+				else { 
+					county_value = 0;
+					percent_value = 0;
+				}
+				var html_text  = "<tspan x='10' dy='0'    >"+ d.properties.name+"</tspan>";
+				    html_text += "<tspan x='10' dy='1.2em'>"+ condition_name+": "+county_value+" ("+percent_value+"%)</tspan>";
+				$('#county').html(html_text);
+				
+// 			counties.selectAll( "path" )
+// 				.attr("fill", function(d){
+// //			 	console.log(d);
+// // 			console.log(d.properties[condition_name]);
+// 				var prop_value = Math.floor(d.properties[condition_name]/d.properties["Grand Total"]*255);
+// // 			console.log(prop_value);
+// 				var shade_color = "rgb("+prop_value+","+prop_value+","+prop_value+")";
+// // 			console.log(shade_color);
+// 				return shade_color;
+// 				})								
+			})
+	
+  $( function() {
+		$("#condition_select").selectmenu({
+   		select: function(event, ui) {
+				condition_name = ui.item.value;
+// 				console.log(condition_name);
+// 				console.log(counties);
+				counties.selectAll( "path" )
+				.attr("fill", function(d){
+					var county_value, prop_value, shade_color;
+					if (d.properties[condition_name]) {
+						county_value = d.properties[condition_name];
+						prop_value = Math.floor(d.properties[condition_name]/d.properties["Grand Total"]*255*7);
+						shade_color = "rgb("+(255-prop_value)+","+(255-prop_value)+","+255+")";
+						}
+					else {
+						county_value = 0;
+						shade_color = "rgb(255,255,255)";
+					}
+					return shade_color;
+					});			
+			} 
+		} );
+	} );	
+		  
+	
+// http://bl.ocks.org/mbostock/7555321	  
+function wrap(text, width) {
+  text.each(function() {
+    var text = d3.select(this),
+        words = text.text().split(/\s+/).reverse(),
+        word,
+        line = [],
+        lineNumber = 0,
+        lineHeight = 1.1, // ems
+        y = text.attr("y"),
+        dy = parseFloat(text.attr("dy")),
+        tspan = text.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", dy + "em");
+    while (word = words.pop()) {
+      line.push(word);
+      tspan.text(line.join(" "));
+      if (tspan.node().getComputedTextLength() > width) {
+        line.pop();
+        tspan.text(line.join(" "));
+        line = [word];
+        tspan = text.append("tspan").attr("x", 0).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
+      }
+    }
+  });
+}
+  </script>
+</body>
+</html>
