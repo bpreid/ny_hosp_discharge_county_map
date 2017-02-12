@@ -1,18 +1,18 @@
 <html>
 <head>
 	<title>New York Hospital Discharges 2014</title>
-	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script> 
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
 	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
 	<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
 	<script src="ny_counties_geojson.js"></script>
-	<script src="NY_Hospitals.js"></script>
+	<script src="ny_hospitals.js"></script>
 	<style>
     #counties path{
-/* 
+/*
       fill: #ccc;
  */
-/* 
+/*
       stroke: #999;
  */
     }
@@ -23,7 +23,7 @@
     #hospitals path:hover{
       fill: black;
     }
-    
+
 	.background {
 	  fill: none;
 	  pointer-events: all;
@@ -49,16 +49,17 @@
 <br><br>
 
 <svg style='border:thin black solid;'>
-	<text id="county" 
+	<text id="county"
 		x="20" y="400" ><tspan>Click on county for info</tspan></text>
 </svg>
 
 	<script>
-  
+
   		var county_name;
   		var condition_name = "LIVEBORN";
   		var conditions = [];
-  
+			var selected_county_path;
+
 		function isCounty(element){
 			var element_county = element["properties"]["name"];
 			var county_position = element_county.indexOf(" Count");
@@ -67,17 +68,17 @@
 		}
 
 		d3.csv("diagnosis_x_county_male.csv", function(data) {
-	
+
 			// Read the data file and find the most common diagnoses state-wide
 			var grand_totals = [];
 			var gt_index = 0;
 			$.each(data[data.length-1], function (key,value){
-				grand_totals[gt_index++] = {key, value};			
+				grand_totals[gt_index++] = {key, value};
 			});
 			grand_totals.sort(function(a,b){
 				return a.value-b.value;
 			});
-	
+
 			for( var d = 0; d<12 ; d++){
 				gt_index = grand_totals.length - 1 - d;
 				var key = grand_totals[gt_index].key
@@ -88,7 +89,7 @@
 			for(var c= 0; c< conditions.length; c++) {
 			  options[options.length] = new Option(conditions[c], conditions[c]);
 			}
-	
+
 			for (var cnty = 0; cnty < data.length; cnty++){
 				county_name  = data[cnty]["County"];
 				var json_index = counties_json.features.findIndex(isCounty);
@@ -98,8 +99,8 @@
 						counties_json.features[json_index]["properties"][index] = value;
 					});
 				}
-			}		
-		});	
+			}
+		});
 
 		var width = 660,
 			 height = 500;
@@ -107,7 +108,7 @@
 		var svg =  d3.select( "svg" )
 		  .attr( "width", width )
 		  .attr( "height", height );
-		  
+
 		var counties = svg.append( "g" ).attr( "id", "counties" );
 
 		var albersProjection = d3.geo.albers()
@@ -125,11 +126,17 @@
 			.append( "path" )
 			.attr( "d", geoPath )
 			.attr( "fill"  , "#fff")
-			.attr( "stroke", "#999")
-			.on('click', function(d) {			
-			console.log(d);
-			console.log(this);
-				d3.select(this).attr("stroke","#f00");
+			.attr( "stroke", "#666")
+			.on('click', function(d) {
+					if (selected_county_path) {
+						selected_county_path.attr("stroke","#666");
+						selected_county_path.attr("stroke-width","1")
+					}
+					selected_county_path = d3.select(this);
+					selected_county_path
+						.attr("stroke","#d66")
+						.attr("stroke-width","2");
+					selected_county_path.moveToFront();
 				county_name = d.properties.name;
 				var county_index = counties_json.features.findIndex(isCounty);
 				var county_value, percent_value;
@@ -137,14 +144,14 @@
 					county_value = d.properties[condition_name];
 					percent_value = Math.floor(d.properties[condition_name]/d.properties["Grand Total"]*100);
 				}
-				else { 
+				else {
 					county_value = 0;
 					percent_value = 0;
 				}
 				var html_text  = "<tspan x='10' dy='0'    >"+ d.properties.name+"</tspan>";
 				    html_text += "<tspan x='10' dy='1.2em'>"+ condition_name+": "+county_value+" ("+percent_value+"%)</tspan>";
 				$('#county').html(html_text);
-				
+
 // 			counties.selectAll( "path" )
 // 				.attr("fill", function(d){
 // //			 	console.log(d);
@@ -154,9 +161,9 @@
 // 				var shade_color = "rgb("+prop_value+","+prop_value+","+prop_value+")";
 // // 			console.log(shade_color);
 // 				return shade_color;
-// 				})								
+// 				})
 			})
-	
+
   $( function() {
 		$("#condition_select").selectmenu({
    		select: function(event, ui) {
@@ -176,13 +183,21 @@
 						shade_color = "rgb(255,255,255)";
 					}
 					return shade_color;
-					});			
-			} 
+					});
+			}
 		} );
-	} );	
-		  
-	
-// http://bl.ocks.org/mbostock/7555321	  
+	} );
+
+	// https://github.com/wbkd/d3-extended
+	d3.selection.prototype.moveToFront = function() {
+		return this.each(function(){
+			this.parentNode.appendChild(this);
+		});
+	};
+
+
+
+// http://bl.ocks.org/mbostock/7555321
 function wrap(text, width) {
   text.each(function() {
     var text = d3.select(this),
