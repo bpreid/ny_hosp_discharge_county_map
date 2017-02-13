@@ -1,64 +1,38 @@
-<html>
-<head>
+<!DOCTYPE html>
 	<title>New York Hospital Discharges 2014</title>
 	<script src="//ajax.googleapis.com/ajax/libs/jquery/1.12.4/jquery.min.js"></script>
 	<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+	<link href="https://fonts.googleapis.com/css?family=Open+Sans" rel="stylesheet">
 	<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
 	<script src="http://d3js.org/d3.v3.min.js" charset="utf-8"></script>
+	<script src="http://d3js.org/colorbrewer.v1.min.js"></script>
 	<script src="ny_counties_geojson.js"></script>
 	<script src="ny_hospitals.js"></script>
+
 	<style>
-    #counties path{
-/*
-      fill: #ccc;
- */
-/*
-      stroke: #999;
- */
-    }
-    #hospitals path{
-      fill: #900;
-      stroke: #999;
-    }
-    #hospitals path:hover{
-      fill: black;
-    }
-
-	.background {
-	  fill: none;
-	  pointer-events: all;
-	}
-
-	.tooltip {
-		 pointer-events:none; /*let mouse events pass through*/
-		 opacity:0;
-		 transition: opacity 0.3s;
-		 text-shadow:1px 1px 0px gray;
-	}
-
-
+		div {font-family: 'Open Sans', sans-serif;}
+		svg {font-family: 'Open Sans', sans-serif;}
   </style>
-</head>
-<body>
 
-<div>
-<select name="condition_select" id="condition_select">
-	<option>Select a Condition</option>
-</select>
-</div>
-<br><br>
+	<div>
+		<h3>New York State Hospital Discharge Data 2014 (Male Gender Subset)</h3>
+		<label>Top 20 Male Conditions State-wide:</label>
+		<select name="condition_select" id="condition_select">
+			<option>Select a Condition</option>
+		</select>
+		<br>Shading by % of Discharges in County
+	</div>
 
-<svg style='border:thin black solid;'>
-	<text id="county"
-		x="20" y="400" ><tspan>Click on county for info</tspan></text>
-</svg>
+	<svg style='border:none;'>
+		<text id="county"
+			x="20" y="360" ><tspan>Click on county for info</tspan></text>
+	</svg>
 
 	<script>
-
-  		var county_name;
-  		var condition_name = "LIVEBORN";
-  		var conditions = [];
-			var selected_county_path;
+  	var county_name;
+  	var condition_name = "LIVEBORN";
+		var conditions = [];
+		var selected_county_path;
 
 		function isCounty(element){
 			var element_county = element["properties"]["name"];
@@ -67,29 +41,28 @@
 			return (element_county == county_name);
 		}
 
+		// Read the data file of diagnoses by county
 		d3.csv("diagnosis_x_county_male.csv", function(data) {
-
-			// Read the data file and find the most common diagnoses state-wide
+			// Put the grand totals for the diagnoses in an array, grand_totals
 			var grand_totals = [];
 			var gt_index = 0;
 			$.each(data[data.length-1], function (key,value){
 				grand_totals[gt_index++] = {key, value};
 			});
-			grand_totals.sort(function(a,b){
-				return a.value-b.value;
-			});
-
-			for( var d = 0; d<12 ; d++){
+			// Sort the grand_totals array to get the most common diagnoses
+			grand_totals.sort(function(a,b){return a.value-b.value;});
+			// Put the 15 most common diagnoses in the array "conditions"
+			for( var d = 0; d<20 ; d++){
 				gt_index = grand_totals.length - 1 - d;
 				var key = grand_totals[gt_index].key
 				if (key != "County" && key != "Grand Total")	conditions.push(key);
 			}
-
+			// Put the most common conditions in a SelectMenu widget
 			var options = $('#condition_select').get(0).options;
 			for(var c= 0; c< conditions.length; c++) {
 			  options[options.length] = new Option(conditions[c], conditions[c]);
 			}
-
+			// Add the diagnosis data to the counties_json array of geospatial data
 			for (var cnty = 0; cnty < data.length; cnty++){
 				county_name  = data[cnty]["County"];
 				var json_index = counties_json.features.findIndex(isCounty);
@@ -102,13 +75,14 @@
 			}
 		});
 
+		// Modifiy the SVG with the geospatial and diagnosis data
 		var width = 660,
 			 height = 500;
 
 		var svg =  d3.select( "svg" )
 		  .attr( "width", width )
 		  .attr( "height", height );
-
+		// counties is the svg group that will house the county border paths
 		var counties = svg.append( "g" ).attr( "id", "counties" );
 
 		var albersProjection = d3.geo.albers()
@@ -128,6 +102,8 @@
 			.attr( "fill"  , "#fff")
 			.attr( "stroke", "#666")
 			.on('click', function(d) {
+					// when a county is clicked, highlight the border by changing the stroke and
+					// stroke-width attributes; first change the previously highlighted border back to normal
 					if (selected_county_path) {
 						selected_county_path.attr("stroke","#666");
 						selected_county_path.attr("stroke-width","1")
@@ -137,57 +113,54 @@
 						.attr("stroke","#d66")
 						.attr("stroke-width","2");
 					selected_county_path.moveToFront();
-				county_name = d.properties.name;
-				var county_index = counties_json.features.findIndex(isCounty);
-				var county_value, percent_value;
-				if (d.properties[condition_name]) {
-					county_value = d.properties[condition_name];
-					percent_value = Math.floor(d.properties[condition_name]/d.properties["Grand Total"]*100);
-				}
-				else {
-					county_value = 0;
-					percent_value = 0;
-				}
-				var html_text  = "<tspan x='10' dy='0'    >"+ d.properties.name+"</tspan>";
-				    html_text += "<tspan x='10' dy='1.2em'>"+ condition_name+": "+county_value+" ("+percent_value+"%)</tspan>";
-				$('#county').html(html_text);
-
-// 			counties.selectAll( "path" )
-// 				.attr("fill", function(d){
-// //			 	console.log(d);
-// // 			console.log(d.properties[condition_name]);
-// 				var prop_value = Math.floor(d.properties[condition_name]/d.properties["Grand Total"]*255);
-// // 			console.log(prop_value);
-// 				var shade_color = "rgb("+prop_value+","+prop_value+","+prop_value+")";
-// // 			console.log(shade_color);
-// 				return shade_color;
-// 				})
+					// Then put data about the county in a text field in the SVG eleemnt
+					county_name = d.properties.name;
+					var county_index = counties_json.features.findIndex(isCounty);
+					var county_value, percent_value;
+					if (d.properties[condition_name]) {
+						county_value = d.properties[condition_name];
+						percent_value = d.properties[condition_name]/d.properties["Grand Total"]*100;
+					}
+					else {
+						county_value = 0;
+						percent_value = 0;
+					}
+					var html_text  = "<tspan x='10' dy='0'    >"+ d.properties.name+"</tspan>";
+					    html_text += "<tspan x='10' dy='1.2em'>"+ condition_name+": "+county_value+" ("+percent_value.toFixed(1)+"%)</tspan>";
+					$('#county').html(html_text);
 			})
 
-  $( function() {
 		$("#condition_select").selectmenu({
    		select: function(event, ui) {
 				condition_name = ui.item.value;
-// 				console.log(condition_name);
-// 				console.log(counties);
+				// find the maximum value for this condition
+				var max_value = 0;
+				for(var cnty = 0; cnty<counties_json.features.length; cnty++) {
+					// var this_value;
+					if (counties_json.features[cnty]["properties"][condition_name])
+						max_value = Math.max(max_value,counties_json.features[cnty]["properties"][condition_name]/counties_json.features[cnty]["properties"]["Grand Total"]);
+					// else this_value = 0;
+					// if (this_value > max_value) max_value = this_value;
+				}
+				// Set up a function to provide colors from 0 to max_value
+				//http://stackoverflow.com/questions/17671252/d3-create-a-continous-color-scale-with-many-strings-inputs-for-the-range-and-dy
+				var numColors = 9;  // pick any number [3-9]
+				var heatmapColour = d3.scale.quantize()
+				  .domain([0,max_value])
+				  .range(colorbrewer.YlGn[numColors]);
+				// Assign an appropriate color to fill each county
 				counties.selectAll( "path" )
 				.attr("fill", function(d){
 					var county_value, prop_value, shade_color;
-					if (d.properties[condition_name]) {
-						county_value = d.properties[condition_name];
-						prop_value = Math.floor(d.properties[condition_name]/d.properties["Grand Total"]*255*7);
-						shade_color = "rgb("+(255-prop_value)+","+(255-prop_value)+","+255+")";
-						}
-					else {
-						county_value = 0;
-						shade_color = "rgb(255,255,255)";
-					}
-					return shade_color;
+					if (d.properties[condition_name])
+						return heatmapColour(d.properties[condition_name]/d.properties["Grand Total"]);
+					else
+						return "rgb(255,255,255)";
 					});
 			}
-		} );
-	} );
+		});
 
+	// Routine to move an element to the front in SVG
 	// https://github.com/wbkd/d3-extended
 	d3.selection.prototype.moveToFront = function() {
 		return this.each(function(){
@@ -195,32 +168,15 @@
 		});
 	};
 
-
-
-// http://bl.ocks.org/mbostock/7555321
-function wrap(text, width) {
-  text.each(function() {
-    var text = d3.select(this),
-        words = text.text().split(/\s+/).reverse(),
-        word,
-        line = [],
-        lineNumber = 0,
-        lineHeight = 1.1, // ems
-        y = text.attr("y"),
-        dy = parseFloat(text.attr("dy")),
-        tspan = text.text(null).append("tspan").attr("x", 0).attr("y", y).attr("dy", dy + "em");
-    while (word = words.pop()) {
-      line.push(word);
-      tspan.text(line.join(" "));
-      if (tspan.node().getComputedTextLength() > width) {
-        line.pop();
-        tspan.text(line.join(" "));
-        line = [word];
-        tspan = text.append("tspan").attr("x", 0).attr("y", y).attr("dy", ++lineNumber * lineHeight + dy + "em").text(word);
-      }
-    }
-  });
-}
   </script>
-</body>
-</html>
+<div>
+	<h4>References</h4>
+	<ul>
+		<li><a href='https://health.data.ny.gov/Health/Hospital-Inpatient-Discharges-SPARCS-De-Identified/u4ud-w55t/data'>New York State SPARCS Data </a></li>
+		<li><a href='http://catalog.opendata.city/dataset/new-york-counties-polygon/resource/c6540266-7bea-4c88-8deb-0ec6870c50b9'>New York Counties GeoJSON</a></li>
+		<li><a href='https://d3js.org/'>D3, Data-Driven Documents</a></li>
+		<li><a href="http://colorbrewer2.org/">ColorBrewer</a></li>
+		<li><a href="https://jquery.com/">jQuery</a>, <a href="http://jqueryui.com/">jQuery User Interface</li>
+		<li><a href='https://fonts.google.com/specimen/Open+Sans?selection.family=Open+Sans'>Google Open Sans Font</a></li>
+	</ul>
+</div>
